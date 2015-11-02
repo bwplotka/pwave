@@ -6,8 +6,7 @@
 
 namespace pwave {
 
-TEST(PwaveTest, ScenarioStableSignal) {
-  const double_t THRESHOLD = 0.01;
+TEST(PwaveTest, ScenarioExample) {
   const int32_t LOAD_ITERATIONS = 100;
 
   SignalScenario signalGen =
