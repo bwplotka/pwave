@@ -2,14 +2,17 @@
 #define PWAVE_GENERATOR_HPP
 
 #include <cmath>
+#include <iostream>
 
 #include "stout/lambda.hpp"
+
+#include "noise.hpp"
 
 namespace pwave {
 
 constexpr double_t DEFAULT_TIME_WINDOW = 1;
 constexpr double_t DEFAULT_START_TIMESTAMP = 34223425;
-constexpr double_t DEFAULT_MAX_NOISE = 50;
+
 
 //! Math Functions - used for load model.
 namespace math {
@@ -27,61 +30,12 @@ inline double_t sinFunction(double_t x) {
 
 
 /**
- * Base class for all Noise Generators.
- * It is needed for Load Generator to introduce noise in samples.
- */
-class NoiseGenerator {
- public:
-  virtual double_t generate(int32_t iteration) = 0;
-};
-
-
-/**
- * Primary Noise Generator - generates no noise.
- */
-class ZeroNoise : public NoiseGenerator {
- public:
-  double_t generate(int32_t iteration) {
-    return 0;
-  }
-};
-
-
-/**
- * Symetric Noise Generator produces deterministic noise.
- * It is similar to sine wave. It alternates: raises to maxNoise
- * and -maxNoise, then stays low.
- * Average of generated values equals 0.
- */
-class SymetricNoiseGenerator : public NoiseGenerator {
- public:
-  explicit SymetricNoiseGenerator(double_t _maxNoise) : maxNoise(_maxNoise) {}
-
-  double_t generate(int32_t iteration) {
-    sign *= -1;
-    if (iteration % 2 == 0) {
-      noise += noiseModifier;
-      if (std::abs(noise) >= maxNoise) noiseModifier *= -1;
-    }
-    return (noise * sign);
-  }
-
-  double_t noiseModifier = 2;
-  double_t maxNoise = DEFAULT_MAX_NOISE;
-
- private:
-  int32_t sign = -1;
-  double_t noise = 0;
-};
-
-
-/**
  * Sample primitive.
  */
-struct LoadSample {
-  LoadSample() {}
+struct SignalSample {
+  SignalSample() {}
 
-  explicit LoadSample(
+  explicit SignalSample(
       double_t _value, double_t _noise, double_t _timestamp)
       : value(_value), noise(_noise), timestamp(_timestamp) {}
 
@@ -98,8 +52,7 @@ struct LoadSample {
   // Print Sample in CSV format.
   // Columns: Value; Noise+Value; Result \n
   void printCSVLine(double_t result) const {
-    std::cout
-        << value << "; "
+    std::cout << value << "; "
         << this->operator()() << "; "
         << result << std::endl;
   }
@@ -111,25 +64,25 @@ struct LoadSample {
 
 
 /**
- * Main class for Load Generator.
+ * Main class for Signal Generator.
  * It generates samples for each loop iteration (increment function).
  * Features:
- * - Generated load is modeled via input function.
+ * - Generated signal is modeled via input function.
  * - Noise can be introduced via Noise Generators.
  * - Stop condition after iterations max exceeded.
  * - Optionally you can start iteration from defied value.
- * - Optionally you can make complicated scenario by modifying load via
+ * - Optionally you can make complicated scenario by modifying signal via
  *    public modifier field.
  */
-class LoadGenerator {
+class SignalGenerator {
  public:
-  explicit LoadGenerator(
+  explicit SignalGenerator(
       const lambda::function<double_t(double_t)>& _modelFunction,
       NoiseGenerator* _noiseGen,
       const int32_t _iterations)
-    : LoadGenerator(_modelFunction, _noiseGen, 0, _iterations) {}
+    : SignalGenerator(_modelFunction, _noiseGen, 0, _iterations) {}
 
-  explicit LoadGenerator(
+  explicit SignalGenerator(
       const lambda::function<double_t(double_t)>& _modelFunction,
       NoiseGenerator* _noiseGen,
       const int32_t _iteration,
@@ -143,8 +96,8 @@ class LoadGenerator {
 
   ~LoadGenerator() {}
 
-  typedef LoadSample const& reference;
-  typedef LoadSample const* pointer;
+  typedef SignalSample const& reference;
+  typedef SignalSample const* pointer;
 
   bool end() {
     return !done;
@@ -153,25 +106,29 @@ class LoadGenerator {
   reference operator*() const { return i; }
   pointer operator->() const { return &i; }
 
-  LoadGenerator& operator++() {
+  // Main Signal generation logic.
+  SignalGenerator& operator++() {
     if (done) return *this;
 
     iteration++;
+    // Stop condition.
     if (iteration >= iterations) {
       done = true;
       return *this;
     }
 
+    // Applying modelFunction.
     i.value = modifier + modelFunction(iteration);
     i.timestamp += timeWindow;
+    // Apply optional noise.
     i.noise = noiseGen->generate(iteration);
 
     if (dbg) std::cout << iteration << std::endl;
     return *this;
   }
 
-  LoadGenerator operator++(int32_t) {
-    LoadGenerator const tmp(*this);
+  SignalGenerator operator++(int32_t) {
+    SignalGenerator const tmp(*this);
     ++*this;
     return tmp;
   }
@@ -185,64 +142,10 @@ class LoadGenerator {
   NoiseGenerator* noiseGen;
   const int32_t iterations;
   bool done;
-  LoadSample i;
+  SignalSample i;
 
   double_t timeWindow = DEFAULT_TIME_WINDOW;
 };
-
-
-/**
- * This function fills instructions and cycles perf events to match given
- * IPC value.
- */
-inline ResourceUsage_Executor generateIPC(
-    const ResourceUsage_Executor _executorUsage,
-    double_t _IpcValue,
-    double_t _timestamp) {
-  const int ACCURACY_MODIFIER = 10;
-  // This function generates IPC with 1/ACCURACY_MODIFIER accuracy.
-  _IpcValue *= ACCURACY_MODIFIER;
-  ResourceUsage_Executor executorUsage;
-  executorUsage.CopyFrom(_executorUsage);
-
-  executorUsage.mutable_statistics()
-      ->mutable_perf()->set_instructions(_IpcValue);
-
-  executorUsage.mutable_statistics()
-      ->mutable_perf()->set_cycles(ACCURACY_MODIFIER);
-
-  executorUsage.mutable_statistics()
-      ->mutable_perf()->set_timestamp(_timestamp);
-
-  return executorUsage;
-}
-
-
-/**
-* This function fills instructions perf events to match given
-* IPC value.
-*/
-inline ResourceUsage_Executor generateIPS(
-    const ResourceUsage_Executor _executorUsage,
-    double_t _IpsValue,
-    double_t _timestamp) {
-  const int ACCURACY_MODIFIER = 10;
-  // This function generates IPS with 1/ACCURACY_MODIFIER accuracy.
-  _IpsValue *= ACCURACY_MODIFIER;
-  ResourceUsage_Executor executorUsage;
-  executorUsage.CopyFrom(_executorUsage);
-
-  executorUsage.mutable_statistics()
-      ->mutable_perf()->set_instructions(_IpsValue);
-
-  executorUsage.mutable_statistics()
-      ->mutable_perf()->set_duration(ACCURACY_MODIFIER);
-
-  executorUsage.mutable_statistics()
-      ->mutable_perf()->set_timestamp(_timestamp);
-
-  return executorUsage;
-}
 
 }  // namespace pwave
 
