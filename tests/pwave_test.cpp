@@ -17,6 +17,7 @@ TEST(PwaveTest, ScenarioExample) {
       .after(23).use(math::linearFunction);
 
   ITERATE_SIGNAL(signalGen) {
+    // Use generated result in your code.
     double_t result = (*signalGen)();
     // See result as CSV:
     (*signalGen).printCSVLine(result);
@@ -24,4 +25,3 @@ TEST(PwaveTest, ScenarioExample) {
 }
 
 }  // namespace pwave
-
