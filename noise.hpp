@@ -11,7 +11,7 @@ constexpr double_t DEFAULT_MAX_NOISE = 50;
  */
 class NoiseGenerator {
 public:
-  virtual double_t generate(int32_t iteration) = 0;
+  virtual double_t generate(size_t iteration) = 0;
 };
 
 
@@ -20,7 +20,7 @@ public:
  */
 class ZeroNoise : public NoiseGenerator {
 public:
-  double_t generate(int32_t iteration) {
+  double_t generate(size_t iteration) {
     return 0;
   }
 };
@@ -36,7 +36,7 @@ class SymetricNoiseGenerator : public NoiseGenerator {
 public:
   explicit SymetricNoiseGenerator(double_t _maxNoise) : maxNoise(_maxNoise) {}
 
-  double_t generate(int32_t iteration) {
+  double_t generate(size_t iteration) {
     sign *= -1;
     if (iteration % 2 == 0) {
       noise += noiseModifier;
@@ -49,7 +49,7 @@ public:
   double_t maxNoise = DEFAULT_MAX_NOISE;
 
 private:
-  int32_t sign = -1;
+  short sign = -1;
   double_t noise = 0;
 };
 

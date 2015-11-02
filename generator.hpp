@@ -3,12 +3,15 @@
 
 #include <cmath>
 #include <iostream>
+#include <memory>
 
 #include "stout/lambda.hpp"
 
 #include "noise.hpp"
 
 namespace pwave {
+
+#define ITERATE_SIGNAL(generator) for(; generator.end() ; generator++)
 
 constexpr double_t DEFAULT_TIME_WINDOW = 1;
 constexpr double_t DEFAULT_START_TIMESTAMP = 34223425;
@@ -17,10 +20,13 @@ constexpr double_t DEFAULT_START_TIMESTAMP = 34223425;
 //! Math Functions - used for load model.
 namespace math {
 
+inline double_t const10Function(double_t x) {
+  return 10;
+}
+
 inline double_t linearFunction(double_t x) {
   return x;
 }
-
 
 inline double_t sinFunction(double_t x) {
   return sin(x) + cos(x);
@@ -77,24 +83,26 @@ struct SignalSample {
 class SignalGenerator {
  public:
   explicit SignalGenerator(
-      const lambda::function<double_t(double_t)>& _modelFunction,
-      NoiseGenerator* _noiseGen,
-      const int32_t _iterations)
-    : SignalGenerator(_modelFunction, _noiseGen, 0, _iterations) {}
+      const size_t _iterations,
+      lambda::function<double_t(double_t)> _modelFunction =
+        math::const10Function,
+      std::shared_ptr<NoiseGenerator> _noiseGen =
+        std::shared_ptr<NoiseGenerator>(new ZeroNoise()))
+    : SignalGenerator(0, _iterations, _modelFunction, _noiseGen) {}
 
   explicit SignalGenerator(
-      const lambda::function<double_t(double_t)>& _modelFunction,
-      NoiseGenerator* _noiseGen,
-      const int32_t _iteration,
-      const int32_t _iterations)
-      : modelFunction(_modelFunction),
-        noiseGen(_noiseGen),
-        iteration(_iteration),
+      const size_t _iteration,
+      const size_t _iterations,
+      lambda::function<double_t(double_t)>& _modelFunction,
+      std::shared_ptr<NoiseGenerator> _noiseGen)
+      : iteration(_iteration),
         iterations(_iterations),
+        modelFunction(_modelFunction),
+        noiseGen(_noiseGen),
         done(false),
         i(_modelFunction(_iteration), 0, DEFAULT_START_TIMESTAMP) {}
 
-  ~LoadGenerator() {}
+  ~SignalGenerator() {}
 
   typedef SignalSample const& reference;
   typedef SignalSample const* pointer;
@@ -103,8 +111,8 @@ class SignalGenerator {
     return !done;
   }
 
-  reference operator*() const { return i; }
-  pointer operator->() const { return &i; }
+  virtual reference operator*() const { return i; }
+  virtual pointer operator->() const { return &i; }
 
   // Main Signal generation logic.
   SignalGenerator& operator++() {
@@ -134,13 +142,13 @@ class SignalGenerator {
   }
 
   double_t modifier = 0;
-  int32_t iteration;
+  size_t iteration;
   bool dbg = false;
 
  protected:
-  const lambda::function<double_t(double_t)>& modelFunction;
-  NoiseGenerator* noiseGen;
-  const int32_t iterations;
+  lambda::function<double_t(double_t)> modelFunction;
+  std::shared_ptr<NoiseGenerator> noiseGen;
+  const size_t iterations;
   bool done;
   SignalSample i;
 
