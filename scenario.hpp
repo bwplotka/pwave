@@ -14,21 +14,41 @@ class SignalScenario : public SignalGenerator {
     prepareIteraion(0), firstIter(true), SignalGenerator(_iterations) {}
 
 
-  SignalScenario& after(size_t iterations) {
+  SignalScenario& after(const size_t iterations) {
     this->prepareIteraion += iterations;
 
     return *this;
   }
 
-  SignalScenario& add(double_t value) {
+  SignalScenario& add(const double_t value) {
     this->addAt(this->prepareIteraion, value);
 
     return *this;
   }
 
-  SignalScenario& addAt(size_t iterations, double_t value) {
-    this->signalModifiers[iterations] = value;
+  SignalScenario& addAt(const size_t iterations, const double_t value) {
+    auto signalModifier = this->signalModifiers.find(this->iteration);
+    if (signalModifier == this->signalModifiers.end()) {
+      this->signalModifiers[iterations] = 0;
+    }
 
+    // Modifiers are cumulative.
+    this->signalModifiers[iterations] += value;
+
+    return *this;
+  }
+
+  SignalScenario& constantAdd(const double_t value, const size_t duration) {
+    this->constantAddAt(this->prepareIteraion, value, duration);
+
+    return *this;
+  }
+
+  SignalScenario& constantAddAt(
+      const size_t iterations, const double_t value, const size_t duration) {
+    for (size_t interIter = 0; interIter < duration; interIter++) {
+      this->addAt(iterations + interIter, value);
+    }
     return *this;
   }
 
@@ -38,7 +58,7 @@ class SignalScenario : public SignalGenerator {
     return *this;
   }
 
-  SignalScenario& useAt(size_t iterations,
+  SignalScenario& useAt(const size_t iterations,
                         lambda::function<double_t(double_t)> model) {
     this->modelModifiers[iterations] = model;
 
@@ -51,7 +71,7 @@ class SignalScenario : public SignalGenerator {
     return *this;
   }
 
-  SignalScenario& useAt(size_t iterations,
+  SignalScenario& useAt(const size_t iterations,
                         NoiseGenerator* noise) {
     this->noiseModifiers[iterations] = std::shared_ptr<NoiseGenerator>(noise);
 
@@ -73,16 +93,16 @@ class SignalScenario : public SignalGenerator {
   }
 
   reference operator*() {
-    if(firstIter) {
-      applyModifiers();
+    if (firstIter) {
+      applyModifiers(0);
       i = SignalSample(modelFunction(iteration), 0, DEFAULT_START_TIMESTAMP);
       firstIter = false;
     }
     return i;
   }
   pointer operator->() {
-    if(firstIter) {
-      applyModifiers();
+    if (firstIter) {
+      applyModifiers(0);
       i = SignalSample(modelFunction(iteration), 0, DEFAULT_START_TIMESTAMP);
       firstIter = false;
     }
@@ -96,22 +116,26 @@ class SignalScenario : public SignalGenerator {
   std::map<size_t, std::shared_ptr<NoiseGenerator>> noiseModifiers;
   std::map<size_t, double_t> signalModifiers;
 
-  void applyModifiers() {
-    auto modelModifier = this->modelModifiers.find(this->iteration);
+  // Applies modifiers as default for NEXT iteration.
+  void applyModifiers(int futureIter = 1) {
+    auto modelModifier =
+      this->modelModifiers.find(this->iteration + futureIter);
     if (modelModifier != this->modelModifiers.end()) {
       // Apply modelModifier.
       this->modelFunction = modelModifier->second;
     }
 
-    auto noiseModifer = this->noiseModifiers.find(this->iteration);
+    auto noiseModifer =
+      this->noiseModifiers.find(this->iteration + futureIter);
     if (noiseModifer != this->noiseModifiers.end()) {
       // Apply noiseModifer.
       this->noiseGen = noiseModifer->second;
     }
 
-    auto signalModifier = this->signalModifiers.find(this->iteration);
+    auto signalModifier =
+      this->signalModifiers.find(this->iteration + futureIter);
     if (signalModifier != this->signalModifiers.end()) {
-      // Apply modelModifier.
+      // Apply signalModifier.
       this->modifier += signalModifier->second;
     }
   }

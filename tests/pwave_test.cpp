@@ -7,20 +7,21 @@
 namespace pwave {
 
 TEST(PwaveTest, ScenarioExample) {
-  const int32_t LOAD_ITERATIONS = 100;
+  const int32_t ITERATIONS = 100;
 
   SignalScenario signalGen =
-    SignalScenario(LOAD_ITERATIONS)
-      .use(math::const10Function)
+    SignalScenario(ITERATIONS)
+      .use(math::linearFunction)
       .after(12).add(-24.05)
       .after(2).use(new SymetricNoiseGenerator(3))
-      .after(23).use(math::linearFunction);
+      .after(23).use(math::const10Function)
+      .after(4).constantAdd(-3.2, 10);
 
   ITERATE_SIGNAL(signalGen) {
     // Use generated result in your code.
     double_t result = (*signalGen)();
     // See result as CSV:
-    (*signalGen).printCSVLine(result);
+    (*signalGen).printCSVLine(signalGen->cumulative());
   }
 }
 

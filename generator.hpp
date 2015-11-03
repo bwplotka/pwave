@@ -11,7 +11,7 @@
 
 namespace pwave {
 
-#define ITERATE_SIGNAL(generator) for(; generator.end() ; generator++)
+#define ITERATE_SIGNAL(generator) for (; generator.end(); generator++)
 
 constexpr double_t DEFAULT_TIME_WINDOW = 1;
 constexpr double_t DEFAULT_START_TIMESTAMP = 34223425;
@@ -42,8 +42,14 @@ struct SignalSample {
   SignalSample() {}
 
   explicit SignalSample(
-      double_t _value, double_t _noise, double_t _timestamp)
-      : value(_value), noise(_noise), timestamp(_timestamp) {}
+      double_t _value,
+      double_t _noise,
+      double_t _timestamp,
+      double_t _cumulativeValue = 0.0)
+    : value(_value),
+      noise(_noise),
+      timestamp(_timestamp),
+      cumulativeValue(_cumulativeValue) {}
 
   // Get a sample with noise introduced.
   double_t operator()() const {
@@ -53,6 +59,11 @@ struct SignalSample {
   // Get a sample without any noise.
   double_t clearValue() const {
     return value;
+  }
+
+  // Get a cumulative sample with noise.
+  double_t cumulative() const {
+    return this->operator()() + cumulativeValue;
   }
 
   // Print Sample in CSV format.
@@ -66,6 +77,7 @@ struct SignalSample {
   double_t value;
   double_t noise;
   double_t timestamp;
+  double_t cumulativeValue;
 };
 
 
@@ -114,7 +126,7 @@ class SignalGenerator {
   virtual reference operator*() const { return i; }
   virtual pointer operator->() const { return &i; }
 
-  // Main Signal generation logic.
+  // Main signal generation logic.
   SignalGenerator& operator++() {
     if (done) return *this;
 
@@ -124,6 +136,9 @@ class SignalGenerator {
       done = true;
       return *this;
     }
+
+    // Cumulate previous value.
+    i.cumulativeValue += i.operator()();
 
     // Applying modelFunction.
     i.value = modifier + modelFunction(iteration);
